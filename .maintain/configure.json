@@ -1,0 +1,28 @@
+{
+  "indexer": "https://apollo-test.helixbridge.app/graphql",
+  "env": "test",
+  "rpcnodes": [
+    {
+      "name": "arbitrum-sepolia",
+      "rpc": "https://sepolia-rollup.arbitrum.io/rpc"
+    },
+    {
+      "name": "sepolia",
+      "rpc": "https://1rpc.io/sepolia"
+    },
+    {
+      "name": "zksync-sepolia",
+      "rpc": "https://sepolia.era.zksync.dev"
+    }
+  ],
+  "bridges": [
+    {
+      "direction": "arbitrum-sepolia->sepolia",
+      "encryptedPrivateKey": "fb248a7f866af5fe65820d916ca4a777:751ec8d91d9c9f2d84ee35bc7907db3311ce1ae4f3bbba303f2d32c88a29962b9801225214996206ddedc7a5ec31ebe5be424545bcaf8b3519cbe978b1cbb924d164"
+    },
+    {
+      "direction": "sepolia->zksync-sepolia",
+      "encryptedPrivateKey": "fb248a7f866af5fe65820d916ca4a777:751ec8d91d9c9f2d84ee35bc7907db3311ce1ae4f3bbba303f2d32c88a29962b9801225214996206ddedc7a5ec31ebe5be424545bcaf8b3519cbe978b1cbb924d164"
+    }
+  ]
+}
