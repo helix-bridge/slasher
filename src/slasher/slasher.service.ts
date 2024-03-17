@@ -1,31 +1,17 @@
 import {Injectable, Logger, OnModuleInit} from "@nestjs/common";
 import {setTimeout} from "timers/promises";
 import {TasksService} from "../tasks/tasks.service";
-import { Store } from "../base/store";
+import {Store} from "../base/store";
 
-import {DataworkerService} from "../dataworker/dataworker.service";
+import {DataworkerService, HistoryRecord} from "../dataworker/dataworker.service";
 import {ConfigureService} from "../configure/configure.service";
-import {EthereumConnectedWallet} from "../base/wallet";
 import {Encrypto} from "../base/encrypto";
 import {EthereumProvider,} from "../base/provider";
-import {Chain} from "../configure/base.service";
 import {LnBridgeContract, Lnv3BridgeContract} from "../base/contract";
+import {Lnv2DefaultSlash, Lnv2OppositeSlash, Lnv3Slash, SlashComponent} from "./slash.component";
+import {EthereumConnectedWallet} from "../base/wallet";
+import {ChainInfo, LnBridge, SlashOptions} from "./types";
 
-
-interface ChainInfo extends Chain {
-  provider: EthereumProvider
-}
-
-export class BridgeConnectInfo {
-  chainInfo: ChainInfo;
-  bridge: LnBridgeContract | Lnv3BridgeContract;
-}
-
-interface LnBridge {
-  bridgeType: string;
-  fromBridge: BridgeConnectInfo;
-  toBridge: BridgeConnectInfo;
-}
 
 @Injectable()
 export class SlasherService implements OnModuleInit {
@@ -34,6 +20,8 @@ export class SlasherService implements OnModuleInit {
   private readonly scheduleInterval = 10000;
 
   private chainInfos = new Map<string, ChainInfo>();
+  private slashComponentMap = new Map<string, SlashComponent>
+  private encrypto: Encrypto;
   private lnBridges: LnBridge[];
   public store: Store;
 
@@ -51,8 +39,8 @@ export class SlasherService implements OnModuleInit {
   }
 
   private initConfigure() {
-    const e = new Encrypto();
-    e.readPasswd();
+    this.encrypto = new Encrypto();
+    this.encrypto.readPasswd();
 
     this.store = new Store(this.configureService.storePath);
     this.chainInfos = new Map(
@@ -79,75 +67,12 @@ export class SlasherService implements OnModuleInit {
           ];
         })
     );
+    this.lnBridges = [];
 
-    // this.lnBridges = [];
-    // for (const bridgeConfig of this.configureService.config.bridges) {
-    //   const direction = bridgeConfig.direction?.split("->");
-    //   if (direction?.length !== 2) {
-    //     this.logger.warn(`bridge direction invalid ${bridgeConfig.direction}`);
-    //     continue;
-    //   }
-    //   const fromChainInfo = this.chainInfos.get(direction[0]);
-    //   if (!fromChainInfo) {
-    //     this.logger.error(`from chain is not invalid ${direction[0]}`);
-    //     continue;
-    //   }
-    //   const toChainInfo = this.chainInfos.get(direction[1]);
-    //   if (!toChainInfo) {
-    //     this.logger.error(`to chain is not invalid ${direction[1]}`);
-    //     continue;
-    //   }
-    //
-    //   const privateKey = e.decrypt(bridgeConfig.encryptedPrivateKey);
-    //   let toWallet = new EthereumConnectedWallet(
-    //     privateKey,
-    //     toChainInfo.provider
-    //   );
-    //   let toBridge = bridgeConfig.bridgeType == "lnv3"
-    //     ? new Lnv3BridgeContract(toChainInfo.lnv3Address, toWallet.wallet)
-    //     : new LnBridgeContract(
-    //       bridgeConfig.bridgeType === "lnv2-default"
-    //         ? toChainInfo.lnv2DefaultAddress
-    //         : toChainInfo.lnv2OppositeAddress,
-    //       toWallet.wallet,
-    //       bridgeConfig.bridgeType
-    //     );
-    //
-    //
-    //   let fromWallet = new EthereumConnectedWallet(
-    //     privateKey,
-    //     fromChainInfo.provider
-    //   );
-    //   let fromBridge = bridgeConfig.bridgeType == "lnv3"
-    //     ? new Lnv3BridgeContract(
-    //       fromChainInfo.lnv3Address,
-    //       fromWallet.wallet
-    //     )
-    //     : new LnBridgeContract(
-    //       bridgeConfig.bridgeType === "lnv2-default"
-    //         ? fromChainInfo.lnv2DefaultAddress
-    //         : fromChainInfo.lnv2OppositeAddress,
-    //       fromWallet.wallet,
-    //       bridgeConfig.bridgeType
-    //     );
-    //
-    //   let fromConnectInfo = {
-    //     chainInfo: fromChainInfo,
-    //     bridge: fromBridge,
-    //   };
-    //
-    //   let toConnectInfo = {
-    //     chainInfo: toChainInfo,
-    //     bridge: toBridge,
-    //   };
-    //
-    //   this.lnBridges.push({
-    //     bridgeType: bridgeConfig.bridgeType,
-    //     fromBridge: fromConnectInfo,
-    //     toBridge: toConnectInfo,
-    //   });
-    // }
-
+    this.slashComponentMap = new Map();
+    this.slashComponentMap.set('lnv3', new Lnv3Slash());
+    this.slashComponentMap.set('lnv2-default', new Lnv2DefaultSlash());
+    this.slashComponentMap.set('lnv2-opposite', new Lnv2OppositeSlash());
   }
 
   private async bootstrap() {
@@ -167,10 +92,101 @@ export class SlasherService implements OnModuleInit {
     }
   }
 
-  private async slash() {
-    const pendingRecords = await this.dataworkerService.queryPendingRecords(this.configureService.indexer);
-    for (const records of pendingRecords) {
+  private async initLnBridge(record: HistoryRecord): Promise<LnBridge> {
+    const pickedLnBridgeConfig = this.lnBridges.find(
+      item =>
+        item.fromBridge.chainInfo.name === record.fromChain
+        && item.toBridge.chainInfo.name === record.toChain
+    );
+    if (pickedLnBridgeConfig) {
+      return pickedLnBridgeConfig;
+    }
+    const fromChainInfo = this.chainInfos.get(record.fromChain);
+    if (!fromChainInfo) {
+      this.logger.warn(`from chain is not invalid ${record.fromChain}`);
+      return;
+    }
+    const toChainInfo = this.chainInfos.get(record.toChain);
+    if (!toChainInfo) {
+      this.logger.warn(`to chain is not invalid ${record.toChain}`);
+      return;
+    }
+    const bridgePair = `${record.fromChain}->${record.toChain}`;
+    let pickedBridgeConfig = this.configureService.config.bridges
+      .find(item => item.direction === bridgePair);
+    if (!pickedBridgeConfig) {
+      this.logger.warn(`missed config for bridge ${bridgePair}, please add to config file`);
+      return;
+    }
+    const privateKey = this.encrypto.decrypt(pickedBridgeConfig.encryptedPrivateKey);
 
+    let toWallet = new EthereumConnectedWallet(
+      privateKey,
+      toChainInfo.provider
+    );
+    let toBridge = record.bridge == "lnv3"
+      ? new Lnv3BridgeContract(toChainInfo.lnv3Address, toWallet.wallet)
+      : new LnBridgeContract(
+        record.bridge === "lnv2-default"
+          ? toChainInfo.lnv2DefaultAddress
+          : toChainInfo.lnv2OppositeAddress,
+        toWallet.wallet,
+        record.bridge
+      );
+
+
+    let fromWallet = new EthereumConnectedWallet(
+      privateKey,
+      fromChainInfo.provider
+    );
+    let fromBridge = record.bridge == "lnv3"
+      ? new Lnv3BridgeContract(
+        fromChainInfo.lnv3Address,
+        fromWallet.wallet
+      )
+      : new LnBridgeContract(
+        record.bridge === "lnv2-default"
+          ? fromChainInfo.lnv2DefaultAddress
+          : fromChainInfo.lnv2OppositeAddress,
+        fromWallet.wallet,
+        record.bridge
+      );
+
+    let fromConnectInfo = {
+      chainInfo: fromChainInfo,
+      bridge: fromBridge,
+    };
+
+    let toConnectInfo = {
+      chainInfo: toChainInfo,
+      bridge: toBridge,
+    };
+
+    const lnBridge = {
+      bridgeType: record.bridge,
+      fromBridge: fromConnectInfo,
+      toBridge: toConnectInfo,
+    };
+    this.lnBridges.push(lnBridge);
+    return lnBridge;
+  }
+
+  private async slash() {
+    const pendingRecords = await this.dataworkerService.queryPendingRecords(
+      this.configureService.indexer,
+    );
+    for (const record of pendingRecords) {
+      const slashComponent: SlashComponent = this.slashComponentMap.get(record.bridge);
+      if (!slashComponent) {
+        this.logger.warn(`unsupported bridge type: ${record.bridge}`);
+        continue;
+      }
+      const lnBridge = await this.initLnBridge(record);
+      const options: SlashOptions = {
+        record,
+        lnBridge,
+      };
+      await slashComponent.slash(options);
     }
   }
 

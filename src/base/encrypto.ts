@@ -9,9 +9,10 @@ import { question } from "readline-sync";
 export class Encrypto {
   public passwd: string;
 
-  async readPasswd() {
+  readPasswd(): string {
     const passwd = question("Password:", { hideEchoBack: true });
     this.passwd = createHash("sha256").update(String(passwd)).digest("base64");
+    return this.passwd;
   }
 
   public decrypt(str): string {

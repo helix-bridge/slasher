@@ -35,6 +35,9 @@ export class Store {
   }
 
   async get<T>(key: string): Promise<T | undefined> {
-    const value = await this
+    try {
+      const value = await this.db.get(key);
+      return JSON.parse(value);
+    } catch {}
   }
 }

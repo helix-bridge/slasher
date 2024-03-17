@@ -6,6 +6,17 @@ import { lnOppositeBridge } from "../abi/lnOppositeBridge";
 import { lnv3Bridge } from "../abi/lnv3Bridge";
 import { abiSafe } from "../abi/abiSafe";
 
+export interface BaseContractOptions {
+  gasLimit?: bigint
+}
+
+export interface BaseCallContractOptions extends BaseContractOptions {
+  gas: GasPrice
+}
+
+export interface RequestSlashAndRemoteReleaseOptions extends BaseCallContractOptions {
+
+}
 
 
 export class EthereumContract {
@@ -96,6 +107,17 @@ export class LnBridgeContract extends EthereumContract {
     return ethers.keccak256(encode);
   }
 
+  public async requestSlashAndRemoteRelease(
+    options: RequestSlashAndRemoteReleaseOptions
+  ): Promise<TransactionResponse> {
+    return await super.call(
+      'requestSlashAndRemoteRelease',
+      [],
+      options.gas,
+      options.gasLimit,
+    );
+  }
+
 }
 
 export class Lnv3BridgeContract extends EthereumContract {
@@ -117,6 +139,17 @@ export class Lnv3BridgeContract extends EthereumContract {
       [remoteChainId, provider, sourceToken, targetToken]
     );
     return ethers.keccak256(encode);
+  }
+
+  public async requestSlashAndRemoteRelease(
+    options: RequestSlashAndRemoteReleaseOptions
+  ): Promise<TransactionResponse> {
+    return await super.call(
+      'requestSlashAndRemoteRelease',
+      [],
+      options.gas,
+      options.gasLimit,
+    );
   }
 
 }

@@ -38,6 +38,10 @@ export interface HistoryRecord {
   lastRequestWithdraw: number
 }
 
+export interface QueryPendingRecordsOptions {
+  maxPendingTime?: number
+}
+
 @Injectable()
 export class DataworkerService implements OnModuleInit {
   private readonly logger = new Logger("dataworker");
@@ -54,12 +58,15 @@ export class DataworkerService implements OnModuleInit {
   // query record from apollo
   async queryPendingRecords(
     url: string,
+    options?: QueryPendingRecordsOptions,
   ): Promise<HistoryRecord[]> {
+    options = options ?? {};
+    options.maxPendingTime = options.maxPendingTime ?? (((+new Date()) - (1000 * 60 * 60)) / 1000);
     // query first pending tx
     const query = `
     {
       historyRecords(
-        order: "nonce_asc"
+        order: "startTime_asc"
         results: 3
       ) {
         records {
@@ -102,7 +109,9 @@ export class DataworkerService implements OnModuleInit {
         operationName: null,
       })
       .then((res) => res.data.data.historyRecords.records);
-    return pendingRecords as unknown as HistoryRecord[];
+    const records = pendingRecords as unknown as HistoryRecord[];
+    return records;
+    // return records.filter(item => item.startTime > options.maxPendingTime);
   }
 
 }
