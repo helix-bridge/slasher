@@ -15,7 +15,21 @@ export interface BaseCallContractOptions extends BaseContractOptions {
 }
 
 export interface RequestSlashAndRemoteReleaseOptions extends BaseCallContractOptions {
+  payableAmount: number
+  params: RequestSlashAndRemoteReleaseOptionsParam
+  remoteChainId: number
+  expectedTransferId: string
+  extParams: string
+}
 
+export interface RequestSlashAndRemoteReleaseOptionsParam {
+  previousTransferId: string
+  provider: string
+  sourceToken: string
+  targetToken: string
+  amount: bigint
+  timestamp: number
+  receiver: string
 }
 
 
@@ -110,9 +124,24 @@ export class LnBridgeContract extends EthereumContract {
   public async requestSlashAndRemoteRelease(
     options: RequestSlashAndRemoteReleaseOptions
   ): Promise<TransactionResponse> {
+    const params = options.params;
     return await super.call(
       'requestSlashAndRemoteRelease',
-      [],
+      [
+        options.payableAmount,
+        [
+          params.previousTransferId,
+          params.provider,
+          params.sourceToken,
+          params.targetToken,
+          params.amount,
+          params.timestamp,
+          params.receiver,
+        ],
+        options.remoteChainId,
+        options.expectedTransferId,
+        options.extParams,
+      ],
       options.gas,
       options.gasLimit,
     );
@@ -144,9 +173,24 @@ export class Lnv3BridgeContract extends EthereumContract {
   public async requestSlashAndRemoteRelease(
     options: RequestSlashAndRemoteReleaseOptions
   ): Promise<TransactionResponse> {
+    const params = options.params;
     return await super.call(
       'requestSlashAndRemoteRelease',
-      [],
+      [
+        options.payableAmount,
+        [
+          params.previousTransferId,
+          params.provider,
+          params.sourceToken,
+          params.targetToken,
+          params.amount,
+          params.timestamp,
+          params.receiver,
+        ],
+        options.remoteChainId,
+        options.expectedTransferId,
+        options.extParams,
+      ],
       options.gas,
       options.gasLimit,
     );

@@ -54,4 +54,36 @@ export class EthereumProvider {
     return await this.provider.getBalance(address);
   }
 
+  async feeData(
+    scale: number,
+    notSupport1559: boolean = false
+  ): Promise<GasPrice> {
+    const fee = await this.provider.getFeeData();
+    if (!notSupport1559 && fee.maxFeePerGas && fee.maxPriorityFeePerGas) {
+      const maxFeePerGas =
+        fee.maxFeePerGas > fee.maxFeePerGas
+          ? fee.maxFeePerGas
+          : fee.maxFeePerGas;
+      const feeInfo: EIP1559Fee = {
+        // maxFeePerGas is not accurate
+        //maxFeePerGas: fee.maxFeePerGas,
+        maxFeePerGas: maxFeePerGas * BigInt(scale),
+        maxPriorityFeePerGas: fee.maxPriorityFeePerGas * BigInt(scale),
+      };
+      return {
+        eip1559fee: feeInfo,
+        isEip1559: true,
+        fee: null,
+      };
+    } else {
+      return {
+        isEip1559: false,
+        fee: {
+          gasPrice: fee.gasPrice * BigInt(scale),
+        },
+        eip1559fee: null,
+      };
+    }
+  }
+
 }

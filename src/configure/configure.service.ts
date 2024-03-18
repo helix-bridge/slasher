@@ -6,6 +6,8 @@ import * as fs from "fs";
 export interface RpcNode {
   name: string;
   rpc: string;
+  fixedGasPrice: number;
+  notSupport1559: boolean;
 }
 
 export interface BridgeInfo {
@@ -14,10 +16,11 @@ export interface BridgeInfo {
 }
 
 export interface ConfigInfo {
-  env: string;
-  indexer: string;
-  rpcnodes: RpcNode[];
-  bridges: BridgeInfo[];
+  env: string
+  indexer: string
+  rpcnodes: RpcNode[]
+  bridges: BridgeInfo[]
+  relayGasLimit: number
 }
 
 @Injectable()

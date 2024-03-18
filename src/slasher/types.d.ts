@@ -6,6 +6,8 @@ import {HistoryRecord} from "../dataworker/dataworker.service";
 
 export interface ChainInfo extends Chain {
   provider: EthereumProvider
+  fixedGasPrice: number
+  notSupport1559: boolean
 }
 
 export class BridgeConnectInfo {
@@ -22,4 +24,5 @@ interface LnBridge {
 export class SlashOptions {
   record: HistoryRecord
   lnBridge: LnBridge
+  relayGasLimit?: number
 }

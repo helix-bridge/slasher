@@ -13,11 +13,17 @@ import {EthereumConnectedWallet} from "../base/wallet";
 import {ChainInfo, LnBridge, SlashOptions} from "./types";
 
 
+interface CacheSlashedInfo {
+  txHash: string
+  timestamp: number
+}
+
 @Injectable()
 export class SlasherService implements OnModuleInit {
 
   private readonly logger = new Logger("slasher");
   private readonly scheduleInterval = 10000;
+  private readonly maxWaitingPendingTimes = 180;
 
   private chainInfos = new Map<string, ChainInfo>();
   private slashComponentMap = new Map<string, SlashComponent>
@@ -76,16 +82,11 @@ export class SlasherService implements OnModuleInit {
   }
 
   private async bootstrap() {
-    // this.chainInfos.forEach((value, key) => {
-    //   this.taskService.addScheduleTask(
-    //     `${key}-lnbridge-relayer`,
-    //     this.scheduleInterval,
-    //     async () => {
-    //       // console.log(key)
-    //     }
-    //   );
-    // });
-
+    this.taskService.addScheduleTask(
+      'clean-slashed-cache',
+      this.scheduleInterval,
+      async () => await this.cleanCache(),
+    );
     while (true) {
       await this.slash();
       await setTimeout(this.scheduleInterval);
@@ -176,6 +177,10 @@ export class SlasherService implements OnModuleInit {
       this.configureService.indexer,
     );
     for (const record of pendingRecords) {
+      if (await this.store.exists(record.id)) {
+        this.logger.debug(`this record ${record.id} already slashed.`);
+        continue;
+      }
       const slashComponent: SlashComponent = this.slashComponentMap.get(record.bridge);
       if (!slashComponent) {
         this.logger.warn(`unsupported bridge type: ${record.bridge}`);
@@ -186,8 +191,19 @@ export class SlasherService implements OnModuleInit {
         record,
         lnBridge,
       };
-      await slashComponent.slash(options);
+      const txHash = await slashComponent.slash(options);
+      const cacheData: CacheSlashedInfo = {
+        txHash,
+        timestamp: +new Date(),
+      };
+      await this.store.put(record.id, cacheData);
     }
+  }
+
+  private async cleanCache() {
+    const delKeys = await this.store.delExpiredCache();
+    if (!delKeys.length) return;
+    this.logger.log(`delete expired caches: ${delKeys}`);
   }
 
 }

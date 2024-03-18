@@ -67,7 +67,7 @@ export class DataworkerService implements OnModuleInit {
     {
       historyRecords(
         order: "startTime_asc"
-        results: 3
+        results: 0
       ) {
         records {
           id
